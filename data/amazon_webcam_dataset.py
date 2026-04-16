@@ -1,14 +1,13 @@
 import os
 import random
+from typing import cast
 
 import torch
 import torch.utils.data as data
 import torchvision.transforms as transforms
-from data.base_dataset import BaseDataset
+from data.base_dataset import BaseDataset, get_transform
 from data.image_folder import is_image_file
 from PIL import Image
-
-RESAMPLE_BICUBIC = getattr(getattr(Image, 'Resampling', Image), 'BICUBIC')
 
 
 class AmazonWebcamDataset(BaseDataset):
@@ -52,21 +51,9 @@ class AmazonWebcamDataset(BaseDataset):
         print(f'Loaded {len(self.amazon_imgs)} Amazon images')
         print(f'Loaded {len(self.webcam_imgs)} Webcam images')
 
-        # Office-31 has mixed image sizes. Force a fixed spatial size so
-        # DataLoader can collate tensors into a batch safely.
-        if opt.isTrain and not opt.no_flip:
-            self.transform = transforms.Compose([
-                transforms.Resize((opt.fineSize, opt.fineSize), RESAMPLE_BICUBIC),
-                transforms.RandomHorizontalFlip(),
-                transforms.ToTensor(),
-                transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
-            ])
-        else:
-            self.transform = transforms.Compose([
-                transforms.Resize((opt.fineSize, opt.fineSize), RESAMPLE_BICUBIC),
-                transforms.ToTensor(),
-                transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
-            ])
+        # Keep preprocessing semantics aligned with global option definitions
+        # (`loadSize`, `fineSize`, and `resize_or_crop`).
+        self.transform = get_transform(opt)
         
         self.shuffle_indices()
 
@@ -112,13 +99,14 @@ class AmazonWebcamDataset(BaseDataset):
         amazon_label = self.amazon_labels[amazon_idx]
         
         try:
-            A_img = Image.open(amazon_path).convert('RGB')
+            A_pil = Image.open(amazon_path).convert('RGB')
         except Exception as e:
             print(f"Error loading {amazon_path}: {e}")
             # Return a dummy image on error
-            A_img = Image.new('RGB', (256, 256))
+            fallback_size = max(self.opt.loadSize, self.opt.fineSize)
+            A_pil = Image.new('RGB', (fallback_size, fallback_size))
         
-        A_img = self.transform(A_img)
+        A_tensor = cast(torch.Tensor, self.transform(A_pil))
         A_path = os.path.basename(amazon_path)
         
         # Get Webcam sample (B domain)
@@ -127,20 +115,36 @@ class AmazonWebcamDataset(BaseDataset):
         webcam_label = self.webcam_labels[webcam_idx]
         
         try:
-            B_img = Image.open(webcam_path).convert('RGB')
+            B_pil = Image.open(webcam_path).convert('RGB')
         except Exception as e:
             print(f"Error loading {webcam_path}: {e}")
             # Return a dummy image on error
-            B_img = Image.new('RGB', (256, 256))
+            fallback_size = max(self.opt.loadSize, self.opt.fineSize)
+            B_pil = Image.new('RGB', (fallback_size, fallback_size))
         
-        B_img = self.transform(B_img)
+        B_tensor = cast(torch.Tensor, self.transform(B_pil))
         B_path = os.path.basename(webcam_path)
+
+        if self.opt.which_direction == 'BtoA':
+            input_nc = self.opt.output_nc
+            output_nc = self.opt.input_nc
+        else:
+            input_nc = self.opt.input_nc
+            output_nc = self.opt.output_nc
+
+        if input_nc == 1:  # RGB to gray
+            tmp = A_tensor[0, ...] * 0.299 + A_tensor[1, ...] * 0.587 + A_tensor[2, ...] * 0.114
+            A_tensor = tmp.unsqueeze(0)
+
+        if output_nc == 1:  # RGB to gray
+            tmp = B_tensor[0, ...] * 0.299 + B_tensor[1, ...] * 0.587 + B_tensor[2, ...] * 0.114
+            B_tensor = tmp.unsqueeze(0)
         
         item = {
-            'A': A_img,
+            'A': A_tensor,
             'A_paths': A_path,
             'A_label': amazon_label,
-            'B': B_img,
+            'B': B_tensor,
             'B_paths': B_path,
             'B_label': webcam_label
         }
