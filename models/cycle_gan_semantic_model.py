@@ -1,10 +1,12 @@
-import torch
 import itertools
-from util.image_pool import ImagePool
-from .base_model import BaseModel
-from . import networks
-from torch.autograd import Variable
+
 import numpy as np
+import torch
+from torch.autograd import Variable
+from util.image_pool import ImagePool
+
+from . import networks
+from .base_model import BaseModel
 
 
 class CycleGANSemanticModel(BaseModel):
@@ -46,14 +48,15 @@ class CycleGANSemanticModel(BaseModel):
             use_sigmoid = opt.no_lsgan
             self.netD_A = networks.define_D(opt.output_nc, opt.ndf,
                                             opt.which_model_netD,
-                                            opt.n_layers_D, opt.norm, use_sigmoid, 
+                                            opt.n_layers_D, opt.norm, use_sigmoid,
                                             opt.init_type, self.gpu_ids)
             self.netD_B = networks.define_D(opt.input_nc, opt.ndf,
                                             opt.which_model_netD,
-                                            opt.n_layers_D, opt.norm, use_sigmoid, 
+                                            opt.n_layers_D, opt.norm, use_sigmoid,
                                             opt.init_type, self.gpu_ids)
-            self.netCLS = networks.define_C(opt.output_nc, opt.ndf, 
-                    init_type=opt.init_type, gpu_ids=self.gpu_ids)
+            self.netCLS = networks.define_C(opt.output_nc, opt.ndf,
+                                            num_classes=opt.num_classes,
+                                            init_type=opt.init_type, gpu_ids=self.gpu_ids)
  
         if self.isTrain:
             self.fake_A_pool = ImagePool(opt.pool_size)

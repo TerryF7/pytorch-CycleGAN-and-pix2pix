@@ -1,7 +1,8 @@
+import functools
+
 import torch
 import torch.nn as nn
 from torch.nn import init
-import functools
 from torch.optim import lr_scheduler
 
 ###############################################################################
@@ -109,12 +110,12 @@ def define_D(input_nc, ndf, which_model_netD,
                                   which_model_netD)
     return init_net(netD, init_type, gpu_ids)
 
-def define_C(output_nc, ndf, init_type='normal', gpu_ids=[]):
+def define_C(output_nc, ndf, num_classes=10, init_type='normal', gpu_ids=[]):
     #if output_nc == 3:
     #    netC = get_model('DTN', num_cls=10)
     #else:
     #    Exception('classifier only implemented for 32x32x3 images')
-    netC = Classifier(output_nc, ndf)
+    netC = Classifier(output_nc, ndf, num_classes=num_classes)
     return init_net(netC, init_type, gpu_ids)
 
 ##############################################################################
@@ -396,7 +397,7 @@ class PixelDiscriminator(nn.Module):
         return self.net(input)
 
 class Classifier(nn.Module):
-    def __init__(self, input_nc, ndf, norm_layer=nn.BatchNorm2d):
+    def __init__(self, input_nc, ndf, num_classes=10, norm_layer=nn.BatchNorm2d):
         super(Classifier, self).__init__()
 
         kw = 3
@@ -420,7 +421,7 @@ class Classifier(nn.Module):
         
         sequence = [
             nn.Linear(ndf * nf_mult, 1024),
-            nn.Linear(1024, 10)
+            nn.Linear(1024, num_classes)
         ]
 
         self.after_linear = nn.Sequential(*sequence)
