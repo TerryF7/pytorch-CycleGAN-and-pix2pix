@@ -29,6 +29,12 @@ def CreateDataset(opt):
     elif opt.dataset_mode == 'svhn_mnist':
         from data.svhn_mnist_dataset import SvhnMnistDataset
         dataset = SvhnMnistDataset()
+    elif opt.dataset_mode == 'mnist_usps':
+        from data.mnist_usps_dataset import MnistUspsDataset
+        dataset = MnistUspsDataset()
+    elif opt.dataset_mode == 'amazon_webcam':
+        from data.amazon_webcam_dataset import AmazonWebcamDataset
+        dataset = AmazonWebcamDataset()
   
     else:
         raise ValueError("Dataset [%s] not recognized." % opt.dataset_mode)
