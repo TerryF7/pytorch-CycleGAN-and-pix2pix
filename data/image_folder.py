@@ -5,11 +5,12 @@
 # directory as well as the subdirectories
 ###############################################################################
 
-import torch.utils.data as data
-
-from PIL import Image
 import os
 import os.path
+
+import numpy as np
+import torch.utils.data as data
+from PIL import Image
 
 IMG_EXTENSIONS = [
     '.jpg', '.JPG', '.jpeg', '.JPEG',
@@ -41,7 +42,7 @@ def load_labels(dir, images):
         label_dict = dict(parse)
         labels = []
         for image in images:
-            im_id = image.split('/')[-1].split.('.')[0]
+            im_id = image.split('/')[-1].split('.')[0]
             labels.append(label_dict[im_id])
     elif os.path.isdir(os.path.join(dir, 'labels')):
         Exception('Not yet implemented load_labels for image folder')
