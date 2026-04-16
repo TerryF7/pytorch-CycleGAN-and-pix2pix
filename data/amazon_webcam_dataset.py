@@ -3,14 +3,15 @@ import random
 from typing import cast
 
 import torch
-import torch.utils.data as data
-import torchvision.transforms as transforms
 from data.base_dataset import BaseDataset, get_transform
 from data.image_folder import is_image_file
 from PIL import Image
 
 
 class AmazonWebcamDataset(BaseDataset):
+    SOURCE_DOMAIN = 'amazon'
+    TARGET_DOMAIN = 'webcam'
+
     """
     Load Amazon and Webcam domain adaptation dataset.
     Structure expected:
@@ -35,18 +36,18 @@ class AmazonWebcamDataset(BaseDataset):
         
         # Load Amazon (source domain A)
         self.amazon_imgs, self.amazon_labels = self._load_domain_images(
-            os.path.join(self.root, 'amazon')
+            os.path.join(self.root, self.SOURCE_DOMAIN)
         )
         
         # Load Webcam (target domain B)
         self.webcam_imgs, self.webcam_labels = self._load_domain_images(
-            os.path.join(self.root, 'webcam')
+            os.path.join(self.root, self.TARGET_DOMAIN)
         )
         
         if len(self.amazon_imgs) == 0:
-            raise RuntimeError(f'Found 0 images in {os.path.join(self.root, "amazon")}')
+            raise RuntimeError(f'Found 0 images in {os.path.join(self.root, self.SOURCE_DOMAIN)}')
         if len(self.webcam_imgs) == 0:
-            raise RuntimeError(f'Found 0 images in {os.path.join(self.root, "webcam")}')
+            raise RuntimeError(f'Found 0 images in {os.path.join(self.root, self.TARGET_DOMAIN)}')
             
         print(f'Loaded {len(self.amazon_imgs)} Amazon images')
         print(f'Loaded {len(self.webcam_imgs)} Webcam images')
@@ -56,6 +57,25 @@ class AmazonWebcamDataset(BaseDataset):
         self.transform = get_transform(opt)
         
         self.shuffle_indices()
+
+    def _load_image_with_fallback(self, img_path):
+        try:
+            return Image.open(img_path).convert('RGB')
+        except Exception as e:
+            print(f"Error loading {img_path}: {e}")
+            fallback_size = max(self.opt.loadSize, self.opt.fineSize)
+            return Image.new('RGB', (fallback_size, fallback_size))
+
+    def _build_item_id(self, image_path, label):
+        image_id = os.path.splitext(os.path.basename(image_path))[0]
+        if image_id.startswith('frame_'):
+            image_id = image_id[len('frame_'):]
+        return f'{label}_{image_id}'
+
+    @staticmethod
+    def _to_grayscale(tensor):
+        gray = tensor[0, ...] * 0.299 + tensor[1, ...] * 0.587 + tensor[2, ...] * 0.114
+        return gray.unsqueeze(0)
 
     def _load_domain_images(self, domain_path):
         """Load images from domain directory organized by class folders."""
@@ -97,39 +117,19 @@ class AmazonWebcamDataset(BaseDataset):
         amazon_idx = self.amazon_indices[index % len(self.amazon_indices)]
         amazon_path = self.amazon_imgs[amazon_idx]
         amazon_label = self.amazon_labels[amazon_idx]
-        
-        try:
-            A_pil = Image.open(amazon_path).convert('RGB')
-        except Exception as e:
-            print(f"Error loading {amazon_path}: {e}")
-            # Return a dummy image on error
-            fallback_size = max(self.opt.loadSize, self.opt.fineSize)
-            A_pil = Image.new('RGB', (fallback_size, fallback_size))
-        
+
+        A_pil = self._load_image_with_fallback(amazon_path)
         A_tensor = cast(torch.Tensor, self.transform(A_pil))
-        amazon_image_id = os.path.splitext(os.path.basename(amazon_path))[0]
-        if amazon_image_id.startswith('frame_'):
-            amazon_image_id = amazon_image_id[len('frame_'):]
-        A_path = f'{amazon_label}_{amazon_image_id}'
+        A_path = self._build_item_id(amazon_path, amazon_label)
         
         # Get Webcam sample (B domain)
         webcam_idx = self.webcam_indices[index % len(self.webcam_indices)]
         webcam_path = self.webcam_imgs[webcam_idx]
         webcam_label = self.webcam_labels[webcam_idx]
-        
-        try:
-            B_pil = Image.open(webcam_path).convert('RGB')
-        except Exception as e:
-            print(f"Error loading {webcam_path}: {e}")
-            # Return a dummy image on error
-            fallback_size = max(self.opt.loadSize, self.opt.fineSize)
-            B_pil = Image.new('RGB', (fallback_size, fallback_size))
-        
+
+        B_pil = self._load_image_with_fallback(webcam_path)
         B_tensor = cast(torch.Tensor, self.transform(B_pil))
-        webcam_image_id = os.path.splitext(os.path.basename(webcam_path))[0]
-        if webcam_image_id.startswith('frame_'):
-            webcam_image_id = webcam_image_id[len('frame_'):]
-        B_path = f'{webcam_label}_{webcam_image_id}'
+        B_path = self._build_item_id(webcam_path, webcam_label)
 
         if self.opt.which_direction == 'BtoA':
             input_nc = self.opt.output_nc
@@ -139,12 +139,10 @@ class AmazonWebcamDataset(BaseDataset):
             output_nc = self.opt.output_nc
 
         if input_nc == 1:  # RGB to gray
-            tmp = A_tensor[0, ...] * 0.299 + A_tensor[1, ...] * 0.587 + A_tensor[2, ...] * 0.114
-            A_tensor = tmp.unsqueeze(0)
+            A_tensor = self._to_grayscale(A_tensor)
 
         if output_nc == 1:  # RGB to gray
-            tmp = B_tensor[0, ...] * 0.299 + B_tensor[1, ...] * 0.587 + B_tensor[2, ...] * 0.114
-            B_tensor = tmp.unsqueeze(0)
+            B_tensor = self._to_grayscale(B_tensor)
         
         item = {
             'A': A_tensor,
