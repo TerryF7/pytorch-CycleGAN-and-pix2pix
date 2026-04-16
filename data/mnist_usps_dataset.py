@@ -31,6 +31,9 @@ class MnistUspsDataset(BaseDataset):
         self.transform = transforms.Compose([
             transforms.ToTensor(),
             transforms.Normalize((0.5,), (0.5,))])
+        
+        # Lambda to convert grayscale (1, H, W) to RGB (3, H, W)
+        self.to_rgb = transforms.Lambda(lambda x: x.repeat(3, 1, 1) if x.shape[0] == 1 else x)
 
         self.shuffle_indices()
 
@@ -51,6 +54,7 @@ class MnistUspsDataset(BaseDataset):
         # MNIST is 28x28, resize to 32x32 to match USPS (will be resized to 32x32)
         A_img = A_img.resize((32, 32))
         A_img = self.transform(A_img)  # Shape: (1, 32, 32)
+        A_img = self.to_rgb(A_img)  # Convert to (3, 32, 32)
         A_path = '%01d_%05d.png' % (A_label, index)
 
         # Get USPS sample (B domain)
@@ -58,6 +62,7 @@ class MnistUspsDataset(BaseDataset):
         # USPS is 16x16, resize to 32x32 for consistency
         B_img = B_img.resize((32, 32))
         B_img = self.transform(B_img)  # Shape: (1, 32, 32)
+        B_img = self.to_rgb(B_img)  # Convert to (3, 32, 32)
         B_path = '%01d_%05d.png' % (B_label, index)
 
         item = {}
