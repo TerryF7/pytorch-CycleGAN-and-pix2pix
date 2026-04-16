@@ -8,6 +8,8 @@ from data.base_dataset import BaseDataset
 from data.image_folder import is_image_file
 from PIL import Image
 
+RESAMPLE_BICUBIC = getattr(getattr(Image, 'Resampling', Image), 'BICUBIC')
+
 
 class AmazonWebcamDataset(BaseDataset):
     """
@@ -49,12 +51,22 @@ class AmazonWebcamDataset(BaseDataset):
             
         print(f'Loaded {len(self.amazon_imgs)} Amazon images')
         print(f'Loaded {len(self.webcam_imgs)} Webcam images')
-        
-        # Use standard transforms: resize to 256, then crop to 224 or use as-is
-        self.transform = transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
-        ])
+
+        # Office-31 has mixed image sizes. Force a fixed spatial size so
+        # DataLoader can collate tensors into a batch safely.
+        if opt.isTrain and not opt.no_flip:
+            self.transform = transforms.Compose([
+                transforms.Resize((opt.fineSize, opt.fineSize), RESAMPLE_BICUBIC),
+                transforms.RandomHorizontalFlip(),
+                transforms.ToTensor(),
+                transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+            ])
+        else:
+            self.transform = transforms.Compose([
+                transforms.Resize((opt.fineSize, opt.fineSize), RESAMPLE_BICUBIC),
+                transforms.ToTensor(),
+                transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+            ])
         
         self.shuffle_indices()
 
