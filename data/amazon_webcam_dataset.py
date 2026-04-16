@@ -107,7 +107,10 @@ class AmazonWebcamDataset(BaseDataset):
             A_pil = Image.new('RGB', (fallback_size, fallback_size))
         
         A_tensor = cast(torch.Tensor, self.transform(A_pil))
-        A_path = os.path.basename(amazon_path)
+        amazon_image_id = os.path.splitext(os.path.basename(amazon_path))[0]
+        if amazon_image_id.startswith('frame_'):
+            amazon_image_id = amazon_image_id[len('frame_'):]
+        A_path = f'{amazon_label}_{amazon_image_id}'
         
         # Get Webcam sample (B domain)
         webcam_idx = self.webcam_indices[index % len(self.webcam_indices)]
@@ -123,7 +126,10 @@ class AmazonWebcamDataset(BaseDataset):
             B_pil = Image.new('RGB', (fallback_size, fallback_size))
         
         B_tensor = cast(torch.Tensor, self.transform(B_pil))
-        B_path = os.path.basename(webcam_path)
+        webcam_image_id = os.path.splitext(os.path.basename(webcam_path))[0]
+        if webcam_image_id.startswith('frame_'):
+            webcam_image_id = webcam_image_id[len('frame_'):]
+        B_path = f'{webcam_label}_{webcam_image_id}'
 
         if self.opt.which_direction == 'BtoA':
             input_nc = self.opt.output_nc
