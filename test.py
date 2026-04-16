@@ -1,11 +1,10 @@
 import os
-from collections import OrderedDict
-
+from options.test_options import TestOptions
 from data import CreateDataLoader
 from models import create_model
-from options.test_options import TestOptions
-from util import html
 from util.visualizer import save_images
+from util import html
+
 
 if __name__ == '__main__':
     opt = TestOptions().parse()
@@ -28,10 +27,6 @@ if __name__ == '__main__':
         model.set_input(data)
         model.test()
         visuals = model.get_current_visuals()
-        if opt.only_fake_B:
-            if 'fake_B' not in visuals:
-                raise KeyError('fake_B not found in model visuals; cannot apply --only_fake_B')
-            visuals = OrderedDict([('fake_B', visuals['fake_B'])])
         img_path = model.get_image_paths()
         if i % 5 == 0:
             print('processing (%04d)-th image... %s' % (i, img_path))
